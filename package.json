@@ -1,0 +1,27 @@
+{
+  "name": "wise-vote-app",
+  "version": "1.0.0",
+  "main": "./src/main/main.js",
+  "scripts": {
+    "react-start": "vite",
+    "electron-start": "wait-on tcp:5173 && electron .",
+    "start": "concurrently -k \"npm run react-start\" \"npm run electron-start\""
+  },
+  "dependencies": {
+    "electron-is-dev": "^3.0.1",
+    "lucide-react": "^0.562.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "react-router-dom": "^7.11.0",
+    "recharts": "^3.6.0",
+    "serialport": "^13.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.2",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^39.2.7",
+    "vite": "^7.3.0",
+    "wait-on": "^9.0.3"
+  }
+}
