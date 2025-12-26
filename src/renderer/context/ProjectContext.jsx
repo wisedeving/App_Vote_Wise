@@ -3,43 +3,31 @@ import React, { createContext, useState, useContext } from 'react';
 const ProjectContext = createContext();
 
 export const ProjectProvider = ({ children }) => {
-  // 1. Datos del Proyecto
   const [proyecto, setProyecto] = useState({
-    nombre: "Sin Título",
-    padron: [], // Lista de Aptos/Usuarios vinculados
-    diapositivas: [] // Lista de preguntas
+    nombre: "Nueva Asamblea",
+    padron: [],
+    // 👇 ESTA ES LA LÍNEA QUE TE FALTA. Sin ella, la app explota en Reportes.
+    historial: [] 
   });
 
-  // 2. Estado de la Votación Actual
-  const [votacionEnCurso, setVotacionEnCurso] = useState(false);
-  const [votosRecibidos, setVotosRecibidos] = useState([]);
-
-  // Funciones Globales
-  const agregarDiapositiva = (titulo) => {
-    const nueva = {
-      id: Date.now(),
-      titulo,
-      tipo: 'SI_NO',
-      resultados: null
-    };
-    setProyecto(prev => ({ ...prev, diapositivas: [...prev.diapositivas, nueva] }));
-  };
-
-  const vincularControl = (idHardware, nombre) => {
-    // Aquí iría la lógica para agregar a la lista 'padron'
-    console.log(`Vinculando ID ${idHardware} a ${nombre}`);
+  // Función para guardar una votación terminada
+  const guardarVotacionEnHistorial = (datosVotacion) => {
+    setProyecto(prev => ({
+      ...prev,
+      // Usamos el operador spread (...) para no perder lo anterior
+      historial: [...(prev.historial || []), {
+        id: Date.now(), // ID único basado en la hora
+        timestamp: new Date().toLocaleString(),
+        ...datosVotacion // Título, resultados, votos individuales, gráfica
+      }]
+    }));
   };
 
   return (
     <ProjectContext.Provider value={{
       proyecto,
       setProyecto,
-      votacionEnCurso,
-      setVotacionEnCurso,
-      votosRecibidos,
-      setVotosRecibidos,
-      agregarDiapositiva,
-      vincularControl
+      guardarVotacionEnHistorial // Exportamos la función
     }}>
       {children}
     </ProjectContext.Provider>

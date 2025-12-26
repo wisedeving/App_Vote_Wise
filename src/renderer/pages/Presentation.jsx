@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useProject } from '../context/ProjectContext';
-import { Play, Square, PieChart, Users, Clock, List, CheckCircle } from 'lucide-react';
+// 1. CORRECCIÓN: Agregué 'Save' a los imports
+import { Play, Square, PieChart, Users, Clock, List, CheckCircle, Save } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 
 export default function Presentation() {
-  const { proyecto } = useProject();
+  const { proyecto, guardarVotacionEnHistorial } = useProject();
   
   // --- CONFIGURACIÓN DE LA VOTACIÓN ---
   const [pregunta, setPregunta] = useState("");
-  const [modoVoto, setModoVoto] = useState("SIMPLE"); // 'SIMPLE' (1 voto) o 'COEFICIENTE'
-  const [tipoPregunta, setTipoPregunta] = useState("SI_NO"); // 'SI_NO' o 'MULTIPLE'
-  const [numOpciones, setNumOpciones] = useState(4); // Para múltiple (A, B, C, D...)
-  const [tiempoLimite, setTiempoLimite] = useState(30); // Segundos por defecto
+  const [modoVoto, setModoVoto] = useState("SIMPLE");
+  const [tipoPregunta, setTipoPregunta] = useState("SI_NO");
+  const [numOpciones, setNumOpciones] = useState(4);
+  const [tiempoLimite, setTiempoLimite] = useState(30);
   
   // --- ESTADO EN VIVO ---
   const [votando, setVotando] = useState(false);
@@ -19,12 +20,12 @@ export default function Presentation() {
   const [totalVotos, setTotalVotos] = useState(0);
   const [idsYaVotaron, setIdsYaVotaron] = useState(new Set());
   
-  // Resultados dinámicos (Usamos un objeto mapa para flexibilidad)
+  // Resultados dinámicos
   const [conteo, setConteo] = useState({}); 
 
   // --- COLORES ---
   const COLORS_SINO = { 'SI': '#10b981', 'NO': '#ef4444', 'ABS': '#f59e0b' };
-  const COLORS_MULTI = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6', '#6366f1']; // A, B, C, D, E, F
+  const COLORS_MULTI = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6', '#6366f1'];
 
   // --- 1. LÓGICA DEL TEMPORIZADOR ---
   useEffect(() => {
@@ -34,7 +35,7 @@ export default function Presentation() {
         setTiempoRestante((prev) => prev - 1);
       }, 1000);
     } else if (tiempoRestante === 0 && votando) {
-      detenerVotacion(); // ¡Tiempo agotado!
+      detenerVotacion();
     }
     return () => clearInterval(intervalo);
   }, [votando, tiempoRestante]);
@@ -44,31 +45,23 @@ export default function Presentation() {
     const removeListener = window.electronAPI.onDatoSerial((data) => {
       if (!votando) return;
 
-      // Evitar doble voto
       if (idsYaVotaron.has(data.id)) return;
 
-      // Calcular valor del voto
       let valor = 1;
       if (modoVoto === 'COEFICIENTE') {
         const usuario = proyecto.padron.find(p => p.id === data.id);
         valor = usuario ? parseFloat(usuario.coeficiente) : 0;
       }
 
-      // Interpretar qué votó el usuario (1, 2, 3...)
       let opcionVotada = null;
 
       if (tipoPregunta === 'SI_NO') {
-        // Mapeo fijo: 1=SI, 2=NO, 3=ABS
         if (data.voto === 1) opcionVotada = 'SI';
         else if (data.voto === 2) opcionVotada = 'NO';
         else if (data.voto === 3) opcionVotada = 'ABS';
       } else {
-        // Mapeo dinámico: 1=A, 2=B... según numOpciones
-        // data.voto viene como número (1, 2, 3...)
         const letras = ['A', 'B', 'C', 'D', 'E', 'F'];
-        // Si votó 1 es A (índice 0), si votó 2 es B (índice 1)
         const indice = data.voto - 1; 
-        
         if (indice >= 0 && indice < numOpciones) {
           opcionVotada = letras[indice];
         }
@@ -92,7 +85,6 @@ export default function Presentation() {
   const iniciarVotacion = () => {
     if (!pregunta) return alert("Escribe una pregunta primero");
     
-    // Inicializar contadores en 0 según el tipo
     const inicial = {};
     if (tipoPregunta === 'SI_NO') {
       inicial['SI'] = 0; inicial['NO'] = 0; inicial['ABS'] = 0;
@@ -104,13 +96,13 @@ export default function Presentation() {
     setConteo(inicial);
     setTotalVotos(0);
     setIdsYaVotaron(new Set());
-    setTiempoRestante(tiempoLimite); // Reset cronómetro
+    setTiempoRestante(tiempoLimite);
     setVotando(true);
   };
 
   const detenerVotacion = () => setVotando(false);
 
-  // Preparar datos para Recharts (Convertir objeto a array)
+  // Preparar datos para gráfica
   const datosGrafica = Object.keys(conteo).map((key, index) => ({
     name: key,
     valor: conteo[key],
@@ -130,19 +122,19 @@ export default function Presentation() {
           <textarea 
             className="input-modern" 
             rows="2" 
-            placeholder="Escribe aquí tu pregunta..."
+            placeholder="Haz clic aquí y escribe..."
             value={pregunta} 
-            onChange={(e) => {
-              console.log("Escribiendo:", e.target.value); // Debug en consola
-              setPregunta(e.target.value);
-            }}
-            // Solo se bloquea si se está votando. Si quieres probar, borra la línea de abajo temporalmente:
-            disabled={votando} 
+            onChange={(e) => setPregunta(e.target.value)}
+            // 1. ELIMINA EL "disabled" TEMPORALMENTE para probar
+            // disabled={votando} 
             style={{ 
               resize: 'none', 
               position: 'relative', 
-              zIndex: 10, 
-              background: votando ? '#e2e8f0' : 'white' // Visualmente claro si está bloqueado
+              zIndex: 9999,          /* 1. Fuerza estar encima de todo */
+              pointerEvents: 'auto', /* 2. Fuerza recibir clics del mouse */
+              WebkitAppRegion: 'no-drag', /* 3. IMPORTANTE: Le dice a Electron "No arrastres la ventana desde aquí" */
+              background: votando ? '#f1f5f9' : 'white',
+              color: 'black'
             }}
           />
         </div>
@@ -218,12 +210,47 @@ export default function Presentation() {
           </div>
         </div>
 
-        {/* BOTÓN ACCIÓN */}
-        <div style={{ marginTop: 'auto' }}>
+        {/* 2. CORRECCIÓN: Limpieza de comentarios y estructura correcta de botones */}
+        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {!votando ? (
-            <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', background: '#16a34a' }} onClick={iniciarVotacion}>
-              <Play size={20} /> INICIAR
-            </button>
+            <>
+              {/* Botón Iniciar */}
+              <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', background: '#16a34a' }} onClick={iniciarVotacion}>
+                <Play size={20} /> {totalVotos > 0 ? 'REINICIAR VOTACIÓN' : 'INICIAR VOTACIÓN'}
+              </button>
+
+              {/* Botón Guardar (Solo aparece si ya hubo votos) */}
+              {totalVotos > 0 && (
+                <button 
+                  className="btn-primary" 
+                  style={{ width: '100%', justifyContent: 'center', background: '#2563eb' }} 
+                  onClick={() => {
+                    // Guardar lógica
+                    const datosSnapshot = {
+                      pregunta,
+                      tipoPregunta,
+                      modoVoto,
+                      totalVotos,
+                      resultadosConteo: conteo,
+                      detalleVotos: Array.from(idsYaVotaron).map(id => {
+                        const usuario = proyecto.padron.find(u => u.id === id);
+                        return { id, nombre: usuario ? usuario.nombre : 'Desconocido' };
+                      })
+                    };
+                    
+                    guardarVotacionEnHistorial(datosSnapshot);
+                    
+                    alert("✅ Votación guardada en Reportes");
+                    setPregunta("");
+                    setConteo({});
+                    setTotalVotos(0);
+                    setIdsYaVotaron(new Set());
+                  }}
+                >
+                  <Save size={20} /> GUARDAR Y SIGUIENTE
+                </button>
+              )}
+            </>
           ) : (
             <button className="btn-danger animate-pulse" style={{ width: '100%', justifyContent: 'center' }} onClick={detenerVotacion}>
               <Square size={20} /> DETENER
@@ -235,7 +262,6 @@ export default function Presentation() {
       {/* --- PANEL VISUALIZACIÓN (DERECHA) --- */}
       <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
         
-        {/* RELOJ GIGANTE */}
         {votando && (
           <div style={{ position: 'absolute', top: 20, right: 20, fontSize: '2rem', fontWeight: 'bold', color: tiempoRestante < 10 ? '#ef4444' : '#64748b' }}>
             {tiempoRestante}s
@@ -254,11 +280,9 @@ export default function Presentation() {
               <YAxis />
               <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px' }} />
               <Bar dataKey="valor" radius={[8, 8, 0, 0]} animationDuration={500}>
-                {
-                  datosGrafica.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))
-                }
+                {datosGrafica.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
                 <LabelList dataKey="valor" position="top" style={{ fontSize: '20px', fontWeight: 'bold', fill: '#666' }} />
               </Bar>
             </BarChart>
