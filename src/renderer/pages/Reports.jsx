@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useProject } from '../context/ProjectContext';
-import { FileDown, PieChart, ChevronRight, BarChart3 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
+import { FileDown, PieChart, ChevronRight, BarChart3, ImageDown } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 import * as XLSX from 'xlsx';
 
 export default function Reports() {
   const { proyecto } = useProject();
-  const [seleccionada, setSeleccionada] = useState(null); // Cuál votación estamos viendo
+  const [seleccionada, setSeleccionada] = useState(null);
 
-  // --- LÓGICA DE EXPORTACIÓN A EXCEL ---
+  // --- 1. LÓGICA DE EXPORTACIÓN A EXCEL ---
   const exportarExcel = () => {
     if (proyecto.historial.length === 0) return alert("No hay votaciones para exportar");
 
@@ -20,45 +20,79 @@ export default function Reports() {
       Pregunta: h.pregunta,
       Tipo: h.tipoPregunta,
       Total_Votos: h.totalVotos,
-      ...h.resultadosConteo // Expande SI, NO, ABS como columnas
+      ...h.resultadosConteo 
     }));
     const wsResumen = XLSX.utils.json_to_sheet(resumenData);
     XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
-    // HOJA 2: DETALLE AUDITORÍA (Quién votó en cada pregunta)
+    // HOJA 2: DETALLE AUDITORÍA (Quién votó qué)
     let auditoriaData = [];
     proyecto.historial.forEach((h, index) => {
-      // Por cada votación, listamos los participantes
       h.detalleVotos.forEach(voto => {
         auditoriaData.push({
           Votacion_ID: index + 1,
           Pregunta: h.pregunta,
           ID_Control: voto.id,
           Nombre_Propietario: voto.nombre,
-          Voto_Registrado: "SI/CONFIRMADO" // Aquí podríamos guardar qué votó exactamente si cambiamos la lógica de privacidad
+          // CAMBIO AQUÍ: Intentamos leer la opción elegida. 
+          // Ajusta 'voto.opcion' si tu propiedad se llama diferente (ej: voto.respuesta)
+          Voto_Registrado: voto.opcion || voto.valor || voto.respuesta || "Voto Registrado"
         });
       });
     });
+    
     const wsAuditoria = XLSX.utils.json_to_sheet(auditoriaData);
     XLSX.utils.book_append_sheet(wb, wsAuditoria, "Auditoria Votos");
 
-    // GUARDAR ARCHIVO
     XLSX.writeFile(wb, `Reporte_Asamblea_${Date.now()}.xlsx`);
   };
 
-  // Preparar datos para gráfica de la votación seleccionada
+  // --- 2. LÓGICA PARA DESCARGAR GRÁFICA COMO IMAGEN ---
+  const descargarGraficaImagen = useCallback(() => {
+    const svg = document.querySelector(".recharts-surface");
+    if (!svg) return alert("No se encontró la gráfica para exportar");
+
+    // Serializar el SVG a string
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    const img = new Image();
+
+    // Obtener dimensiones del SVG original
+    const svgSize = svg.getBoundingClientRect();
+    canvas.width = svgSize.width;
+    canvas.height = svgSize.height;
+
+    img.setAttribute("src", "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData))));
+
+    img.onload = () => {
+      // Dibujar fondo blanco (para que no sea transparente)
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      // Crear enlace de descarga
+      const link = document.createElement("a");
+      link.download = `Grafica_${seleccionada?.pregunta || 'votacion'}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    };
+  }, [seleccionada]);
+
+
+  // Preparar datos para gráfica
   const datosGrafica = seleccionada 
     ? Object.keys(seleccionada.resultadosConteo).map(key => ({
         name: key,
         valor: seleccionada.resultadosConteo[key],
-        fill: '#8884d8' // Color base, puedes mejorarlo
+        fill: '#8884d8'
       }))
     : [];
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '20px', height: '100%', overflow: 'hidden' }}>
       
-      {/* --- PANEL IZQUIERDO: LISTA DE HISTORIAL --- */}
+      {/* --- PANEL IZQUIERDO: LISTA --- */}
       <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
           <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Historial ({proyecto.historial.length})</h2>
@@ -103,22 +137,35 @@ export default function Reports() {
       <div className="card" style={{ overflowY: 'auto' }}>
         {seleccionada ? (
           <div className="animate-fade-in">
-            <h1 style={{ marginTop: 0 }}>{seleccionada.pregunta}</h1>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start'}}>
+                <h1 style={{ marginTop: 0 }}>{seleccionada.pregunta}</h1>
+                <button 
+                    onClick={descargarGraficaImagen}
+                    style={{ 
+                        background: '#6366f1', color: 'white', border: 'none', 
+                        padding: '8px 12px', borderRadius: '6px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '5px'
+                    }}
+                >
+                    <ImageDown size={16} /> Guardar Gráfica
+                </button>
+            </div>
+
             <div style={{ display: 'flex', gap: '20px', color: '#64748b', marginBottom: '20px' }}>
               <span>📅 {seleccionada.timestamp}</span>
               <span>🗳️ Modo: {seleccionada.modoVoto}</span>
             </div>
 
             {/* GRÁFICA ESTÁTICA */}
-            <div style={{ width: '100%', height: '300px', background: '#f8fafc', borderRadius: '10px', padding: '10px' }}>
+            <div id="grafica-container" style={{ width: '100%', height: '300px', background: '#f8fafc', borderRadius: '10px', padding: '10px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={datosGrafica}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="name" />
-                  <YAxis />
+                  <YAxis allowDecimals={false} />
                   <Tooltip />
                   <Bar dataKey="valor" fill="#6366f1">
-                     <LabelList dataKey="valor" position="top" />
+                      <LabelList dataKey="valor" position="top" />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -131,7 +178,7 @@ export default function Reports() {
                 <tr style={{ textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>
                   <th style={{ padding: '10px' }}>ID</th>
                   <th style={{ padding: '10px' }}>Nombre</th>
-                  <th style={{ padding: '10px' }}>Estado</th>
+                  <th style={{ padding: '10px' }}>Voto</th>
                 </tr>
               </thead>
               <tbody>
@@ -139,7 +186,10 @@ export default function Reports() {
                   <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '8px' }}>{v.id}</td>
                     <td style={{ padding: '8px', fontWeight: 'bold' }}>{v.nombre}</td>
-                    <td style={{ padding: '8px', color: '#16a34a' }}>✅ Voto Recibido</td>
+                    <td style={{ padding: '8px', color: '#16a34a' }}>
+                        {/* MUESTRA EL VOTO REAL EN PANTALLA TAMBIÉN */}
+                        {v.opcion || v.valor || "CONFIRMADO"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
